@@ -251,7 +251,7 @@ Plan source example: `TestPlanfolder/SauceDemoLogin.test-plan.md`.
 
 ---
 
-## Agent workflow (GitHub Copilot / Cursor agents)
+## Agent workflow (GitHub Copilot )
 
 | Agent | File | Role |
 |---|---|---|
