@@ -118,6 +118,7 @@ test.describe('Login', () => {
   });
 
   test('Displayed performance glitch user account can log in', async ({ page }) => {
+    test.setTimeout(60_000);
     await openLoginPage(page);
 
     await login(page, 'performance_glitch_user', password());
