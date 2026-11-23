@@ -1,0 +1,222 @@
+# SauceDemo — Business Requirements Document
+
+| Field | Value |
+|---|---|
+| Product | SauceDemo (demo e-commerce store) |
+| URL | https://www.saucedemo.com/ |
+| Document type | Business Requirements |
+| Version | 1.0 |
+| Status | Draft |
+| Audience | BA, QA, Automation, Development |
+
+---
+
+## 1. Problem statement
+
+Teams need a stable, publicly available shopping application to practice and demonstrate end-to-end quality workflows (requirements → test design → automation → release checks) without depending on a private production system.
+
+SauceDemo provides a simple retail journey — **login → browse products → cart → checkout → confirmation** — that can be used as the business reference for planning, automation, and agentic SDLC demos.
+
+---
+
+## 2. Goals
+
+1. Allow authenticated users to browse a fixed product catalog.
+2. Allow users to add/remove products and complete a checkout with customer details.
+3. Enforce clear login validation and account-state rules (including locked-out users).
+4. Provide predictable UI behavior so automated tests and training scenarios remain repeatable.
+
+### Success metrics
+
+| Metric | Target |
+|---|---|
+| Happy-path checkout completion | User reaches order confirmation after valid login + cart + customer info |
+| Login validation coverage | Missing/invalid credentials and locked-out account show clear errors |
+| Catalog integrity | All catalog products show name, description, price, image, and cart control |
+| Cart accuracy | Badge count and cart line items match selected products |
+| Automation readiness | Critical flows are expressible as independent or serial dependent test scenarios |
+
+---
+
+## 3. Users & personas
+
+| Persona | Account (demo) | Intent |
+|---|---|---|
+| Standard shopper | `standard_user` | Complete shopping and checkout normally |
+| Locked-out shopper | `locked_out_user` | Attempt login; must be blocked with a clear message |
+| Problem shopper | `problem_user` | Exercise degraded / incorrect UI behavior scenarios |
+| Performance shopper | `performance_glitch_user` | Exercise slow-response login / navigation scenarios |
+| Error-prone shopper | `error_user` | Exercise error-state behaviors during shopping |
+| Visual shopper | `visual_user` | Exercise visual/layout differences |
+
+Shared demo password is environment-configured (default known demo value for SauceDemo). Password must not be hardcoded in business rules beyond “valid shared password for allowed accounts.”
+
+---
+
+## 4. In scope
+
+- Login (success, validation, locked-out, dismissible errors, masked password)
+- Product catalog listing and sorting
+- Product detail view and return to catalog
+- Add / remove from cart (list and detail)
+- Cart review
+- Checkout information (first name, last name, postal code)
+- Checkout overview and order completion / confirmation
+- Session menu behaviors needed for shopping (e.g. logout) where exposed by the app
+
+## 5. Out of scope
+
+- Payment gateway / real payment processing
+- Account registration, password reset, profile management
+- Inventory admin / merchandising back office
+- Multi-currency, tax configuration, promotions engine
+- Mobile-native apps (web responsive behavior only if explicitly tested)
+- Backend APIs as a primary contract (UI-first demo product)
+
+---
+
+## 6. Business capabilities
+
+### 6.1 Authentication
+
+**Capability:** Only allowed credentials may enter the store.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| BR-AUTH-01 | The login page shall present Username, Password, and Login controls. | Must |
+| BR-AUTH-02 | A valid standard (or other allowed non-locked) user with correct password shall land on the Products / inventory page. | Must |
+| BR-AUTH-03 | An incorrect username or password shall keep the user on login and show a mismatch error. | Must |
+| BR-AUTH-04 | Missing username shall show a username-required error. | Must |
+| BR-AUTH-05 | Missing password shall show a password-required error. | Must |
+| BR-AUTH-06 | A locked-out user shall not enter the store and shall see a locked-out error. | Must |
+| BR-AUTH-07 | Password input shall remain masked. | Must |
+| BR-AUTH-08 | Login error messages shall be dismissible when a close control is provided. | Should |
+| BR-AUTH-09 | Login may be submitted via keyboard Enter as well as the Login button. | Should |
+| BR-AUTH-10 | After a failed attempt, a subsequent successful login shall clear prior login errors. | Should |
+
+### 6.2 Product catalog
+
+**Capability:** Authenticated users can discover products and inspect details.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| BR-PROD-01 | Products page shall display the full demo catalog after successful login. | Must |
+| BR-PROD-02 | Each product card shall show name, price, image, and add-to-cart (or remove) control. | Must |
+| BR-PROD-03 | Users shall sort products by Name (A–Z), Name (Z–A), Price (low–high), Price (high–low). | Must |
+| BR-PROD-04 | Selecting a product shall open a detail view with name, description, price, and image. | Must |
+| BR-PROD-05 | From detail view, users shall be able to return to the catalog. | Must |
+| BR-PROD-06 | Users shall add or remove a product from cart on the listing and on the detail view. | Must |
+
+### 6.3 Cart
+
+**Capability:** Users maintain a working cart before checkout.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| BR-CART-01 | Adding a product shall increase the cart badge count. | Must |
+| BR-CART-02 | Removing a product shall decrease the cart badge count (empty when none remain). | Must |
+| BR-CART-03 | Cart page shall list each selected product with expected name and price. | Must |
+| BR-CART-04 | Users shall proceed from cart to checkout when cart has items. | Must |
+
+### 6.4 Checkout & confirmation
+
+**Capability:** Users complete an order with shipping/customer details and see confirmation.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| BR-CHK-01 | Checkout step one shall collect First Name, Last Name, and Zip/Postal Code. | Must |
+| BR-CHK-02 | Continuing with valid customer data shall show an order overview of cart items. | Must |
+| BR-CHK-03 | Finishing checkout shall show confirmation (e.g. “Thank you for your order!”). | Must |
+| BR-CHK-04 | After confirmation, order context (customer / items selected for the journey) is considered completed for that session. | Should |
+
+---
+
+## 7. Business rules
+
+1. **Access gate:** Inventory, cart, and checkout are available only after successful authentication.
+2. **Locked account:** Locked-out credentials never create a shopping session.
+3. **Cart state:** Cart contents drive checkout eligibility; empty-cart checkout is not a happy-path requirement.
+4. **Catalog is fixed:** Demo catalog product set is stable for training/automation (names/prices as shown in UI).
+5. **No real payment:** Confirmation is simulated; no payment capture is required.
+6. **Environment independence (for delivery teams):** Business data for journeys (customer names, postal codes, product *names*) must not depend on a specific test environment URL or secret beyond login credentials configuration.
+
+---
+
+## 8. End-to-end journeys
+
+### Journey J1 — Successful purchase (happy path)
+
+1. Open login  
+2. Sign in as standard shopper  
+3. Add one or more products to cart  
+4. Open cart and verify items  
+5. Enter customer details  
+6. Review overview and finish  
+7. See order confirmation  
+
+### Journey J2 — Login rejection
+
+1. Open login  
+2. Submit invalid, incomplete, or locked-out credentials  
+3. Remain on login with the correct business error  
+
+### Journey J3 — Browse & decide
+
+1. Sign in  
+2. Sort / open product details  
+3. Add or remove items before deciding to checkout  
+
+---
+
+## 9. Data expectations (business level)
+
+| Entity | Key attributes | Notes |
+|---|---|---|
+| User | username, password, account state (active / locked) | Demo accounts listed in §3 |
+| Product | name, description, price, image | Identified by visible name in UI |
+| Cart | list of products, item count | Session-scoped |
+| Customer | first name, last name, postal code | Entered at checkout |
+| Order (demo) | confirmation message, selected products, customer | Simulated completion only |
+
+PII: Customer fields are demo/test data only; treat as non-production sample data.
+
+---
+
+## 10. Non-functional expectations
+
+| Area | Expectation |
+|---|---|
+| Usability | Errors are visible and understandable (“Epic sadface …” style messages on login) |
+| Security (demo) | Password field masked; no requirement for MFA on this demo app |
+| Performance | Standard user path remains usable; performance_glitch_user may be slower by design |
+| Reliability | Happy path must be deterministic for automation and training |
+| Compatibility | Modern desktop browsers (Chromium, Firefox, WebKit) for QA automation |
+
+---
+
+## 11. Acceptance summary (definition of done for requirements)
+
+- [ ] Login success and all login failure cases in §6.1 are agreed
+- [ ] Catalog, sort, detail, and cart controls in §6.2–6.3 are agreed
+- [ ] Checkout + confirmation in §6.4 are agreed
+- [ ] Journeys J1–J3 are accepted as primary business flows
+- [ ] Out-of-scope list is signed off by stakeholders
+
+---
+
+## 12. Traceability (to this repository)
+
+| Business area | Existing artifacts |
+|---|---|
+| Login | `TestPlanfolder/SauceDemoLogin.test-plan.md`, `tests/login/saucedemo-login.spec.ts` |
+| Products | `TestPlanfolder/SauceDemoProducts.test-plan.md` |
+| Checkout journey | `tests/flows/checkout.dependency.spec.ts`, `src/data/flows/checkout.flow.ts` |
+| Framework | `README.md` (POM, actions, fixtures, runtime data) |
+
+---
+
+## 13. Open questions
+
+1. Should visual / problem / error user behaviors be formal Must requirements, or training-only Should scenarios?
+2. Is logout / reset-app-state part of mandatory business scope for release demos?
+3. Do stakeholders want a separate PRD + epics/stories breakdown next, or is this BRD sufficient for QA planning?
