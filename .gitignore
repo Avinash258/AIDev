@@ -6,3 +6,8 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# CI AI code review output
+/reports/
+.playwright-mcp/*
+.playwright-mcp/console-2026-11-25T04-46-17-748Z.log

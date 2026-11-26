@@ -1,0 +1,142 @@
+name: CI Failure Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: GitHub Actions run ID to collect for analysis
+        required: true
+        type: string
+  workflow_run:
+    workflows:
+      - Playwright Tests
+      - AI Code Review
+      - Copilot Setup Steps
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  failure-analysis:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Collect failed run details and logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          mkdir -p reports
+          gh run view "$RUN_ID" --repo "$GH_REPO" --json name,number,event,headBranch,headSha,status,conclusion,url,jobs > reports/run.json
+          if ! gh run view "$RUN_ID" --repo "$GH_REPO" --log-failed > reports/failed-logs.txt 2> reports/log-error.txt; then
+            printf 'Failed to retrieve job logs:\n' > reports/failed-logs.txt
+            cat reports/log-error.txt >> reports/failed-logs.txt
+          fi
+
+      - name: Build failure summary
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const run = JSON.parse(fs.readFileSync("reports/run.json", "utf8"));
+            const failedJobs = (run.jobs || []).filter((job) => job.conclusion === "failure");
+            const rows = failedJobs.map((job) => {
+              const failedSteps = (job.steps || [])
+                .filter((step) => step.conclusion === "failure")
+                .map((step) => `  - ${step.name}`);
+              return `- **${job.name}**${failedSteps.length ? `\n${failedSteps.join("\n")}` : ""}`;
+            });
+            const report = [
+              "# CI Failure Evidence",
+              "",
+              `- **Workflow:** ${run.name}`,
+              `- **Run:** [${run.number}](${run.url})`,
+              `- **Event:** ${run.event}`,
+              `- **Branch:** ${run.headBranch}`,
+              `- **Commit:** \`${run.headSha}\``,
+              `- **Conclusion:** ${run.conclusion}`,
+              "",
+              "## Failed jobs and steps",
+              "",
+              rows.length ? rows.join("\n") : "_No failed jobs were listed in the run metadata._",
+              "",
+              "This workflow collects evidence only; it does not infer a root cause. Use the `testfailureanalysis` agent with this run ID and the attached `failed-logs.txt` artifact to diagnose the failure.",
+              "",
+            ].join("\n");
+            fs.writeFileSync("reports/ci-failure-analysis.md", report);
+            fs.writeFileSync("reports/ci-failure-analysis.txt", report);
+          '
+
+      - name: Write job summary
+        if: always()
+        run: |
+          if [ -f reports/ci-failure-analysis.md ]; then
+            cat reports/ci-failure-analysis.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## CI Failure Analysis" >> "$GITHUB_STEP_SUMMARY"
+            echo "Failed-run evidence was not collected. Check the workflow logs for details." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload failure analysis evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-failure-analysis-evidence
+          path: |
+            reports/ci-failure-analysis.md
+            reports/ci-failure-analysis.txt
+            reports/run.json
+            reports/failed-logs.txt
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Comment evidence on pull request
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.pull_requests[0]
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'reports/ci-failure-analysis.md';
+            if (!fs.existsSync(path)) {
+              core.warning('No failure analysis evidence found to comment');
+              return;
+            }
+            let body = fs.readFileSync(path, 'utf8');
+            if (body.length > 60000) {
+              body = body.slice(0, 60000) + '\n\n_(truncated — full evidence is in the workflow artifact)_';
+            }
+            const marker = '<!-- ci-failure-analysis-evidence -->';
+            const commentBody = `${marker}\n## CI Failure Evidence\n\n${body}\n\n---\n_Artifact: **ci-failure-analysis-evidence** on this workflow run._`;
+            const issue_number = context.payload.workflow_run.pull_requests[0].number;
+            const { owner, repo } = context.repo;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+            });
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body: commentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: commentBody,
+              });
+            }

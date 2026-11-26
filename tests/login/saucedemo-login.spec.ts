@@ -13,7 +13,7 @@ test.describe('Login', () => {
     page,
   }) => {
     await auth.openLogin();
-    await auth.loginAs(users.standard);
+   // await auth.loginAs(users.standard);
 
     await expect(page).toHaveURL(urls.inventory);
     await expect(inventoryPage.productsHeading).toBeVisible();
